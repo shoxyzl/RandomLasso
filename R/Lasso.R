@@ -8,9 +8,8 @@ lasso <- function(x,y,continuous=T){
   else{
     y.factor <- as.factor(y)
     cv.lambda <- glmnet::cv.glmnet(x,y.factor,alpha=1,family='binomial',nfolds = 5)
-    fit <- glmnet::glmnet(x,y.factor, alpha = 1,family="binomial",lambda = cv.lambda$lambda.min)
+    fit <- glmnet::glmnet(x,y.factor, alpha = 1,family="binomial",lambda = cv.lambda$lambda.min,intercept = F,standardize = FALSE)
   }
-  c <- coef(fit,s = 'lambda.min')
-  beta_hat <- c[c[,1]!=0,]
-  return(beta_hat)
+  c <- coef(fit)[-1]
+  return(c)
 }
