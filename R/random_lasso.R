@@ -97,7 +97,8 @@ random_lasso.select <- function(X, y, B, q2, importance, continuous) {
   
   beta_hat <- matrix(NA, nrow=B, ncol=q)
   for (i in 1:B) {
-    beta_hat[i,] <- t(as.matrix(random_lasso.select_i(X, y, B, q2, importance, continuous)))
+    beta_hat[i,] <- t(as.matrix(random_lasso.select_i(X, y, B, q2, 
+                                                      importance, continuous)))
   }
   
   beta_j_final <- apply(t(beta_hat), 1, function(x) 1/B * sum(x))
