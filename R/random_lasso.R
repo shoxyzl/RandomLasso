@@ -1,6 +1,9 @@
 library(parallel)
 library(glmnet)
 
+# How to do mean correction?
+
+
 
 ################################################################################
 ############################# Utility Functions ################################
@@ -116,12 +119,21 @@ random_lasso <- function(X, y, B, q1, q2, continuous) {
   return(beta_j_hat)
 }
 
+random_lasso.predict <- function() {}
+
+cv.random_lasso <- function(X, y, B, Q1, Q2, continuous) {
+  for (q1 in Q1) {
+    for (q2 in Q2) {
+      
+    }
+  }
+}
 
 
-X = matrix(rnorm(100 * 50), 100, 50)
+X = matrix(rnorm(100 * 20), 100, 20)
 y = rnorm(100)
 B = 100
-q1 = 20
-q2 = 20
+q1 = 5
+q2 = 8
 
 beta_j_hat <- random_lasso(X,y,B,q1,q2,T)
