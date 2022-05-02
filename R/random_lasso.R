@@ -1,8 +1,6 @@
 library(parallel)
 library(glmnet)
-
-# How to do mean correction?
-
+library(tune)
 
 
 ################################################################################
@@ -19,6 +17,27 @@ bootstrap <- function(X, y) {
 }
 
 
+demean <- function(X, y, continuous) {
+  # tell X and y that they are no-good wastes of space.
+  n <- dim(X)[1]
+  demeaned_X <- X
+  feature_means <- apply(X, 2, mean)
+  for (i in 1:n){
+    row <- X[i,]
+    demeaned_row <- X[i,] - feature_means
+    demeaned_X[i,] <- demeaned_row
+  }
+  if (continuous) {
+    demeaned_y <- y - mean(y)
+    return(list(X = demeaned_X, y = demeaned_y))
+  }
+  else {
+    return(list(X = demeaned_X,))
+  }
+  
+}
+
+
 ################################################################################
 ########################### Generic Regularized GLM ############################
 ################################################################################
@@ -26,6 +45,9 @@ bootstrap <- function(X, y) {
 
 regularized_glm <- function(X, y, alpha=0, continuous=T, exclude=NULL) {
   X <- as.matrix(X)
+  
+  
+  
   if (continuous) {
     cv <- cv.glmnet(X, y, alpha=alpha, exclude=exclude)
     model <- glmnet(X, y, alpha=alpha, exclude=exclude, lambda=cv$lambda.min)
@@ -33,9 +55,10 @@ regularized_glm <- function(X, y, alpha=0, continuous=T, exclude=NULL) {
   else {
     y <- as.factor(y)
     cv <- cv.glmnet(X, y, alpha=alpha, exclude=exclude, family='binomial')
-    model <- glmnet(X, y, alpha=alpha, exclude=exclude, family='binomial', 
-                    lambda=cv$lambda.min)
+    model <- glmnet(X, y, alpha=alpha, exclude=exclude, 
+                      family='binomial', lambda=cv$lambda.min)
   }
+  
   return (model)
 }
 
@@ -44,11 +67,11 @@ regularized_glm <- function(X, y, alpha=0, continuous=T, exclude=NULL) {
 ################################################################################
 
 
-lasso <- function(X, y, continuous=T, exclude=NULL) {
+lasso <- function(X, y, continuous=TRUE, exclude=NULL) {
   return(regularized_glm(X, y, 1, continuous, exclude))
 }
 
-ridge <- function(X, y, continuous=T, exclude=NULL) {
+ridge <- function(X, y, continuous=TRUE, exclude=NULL) {
   return(regularized_glm(X, y, 0, continuous, exclude))
 }
 
@@ -63,7 +86,7 @@ random_lasso.generate_i <- function(X, y, q1, continuous) {
   exclude <- sample(1:q, q-q1, replace=FALSE)
   
   beta_j_hat <- coef(lasso(bs$X, bs$y, continuous, exclude))
-  return(as.vector(beta_j_hat[2:(q+1),]))
+  return(as.vector(beta_j_hat))
 }
 
 
@@ -92,7 +115,7 @@ random_lasso.select_i <- function(X, y, B, q2, importance, continuous) {
   exclude <- (1:q)[-include]
   
   beta_j_hat <- coef(lasso(bs$X, bs$y, continuous, exclude))
-  return(as.vector(beta_j_hat[2:(q+1),]))
+  return(as.vector(beta_j_hat))
 }
 
 random_lasso.select <- function(X, y, B, q2, importance, continuous) {
@@ -114,12 +137,57 @@ random_lasso.select <- function(X, y, B, q2, importance, continuous) {
 
 
 random_lasso <- function(X, y, B, q1, q2, continuous) {
+  # Step 1:
+  #   - Create some number of bootstrap samples
+  #   - Select a subset of covariates for each sample
+  #     - randomly choosing some number of features "q1"
+  #   - Apply linear regression with lasso regularization
+  #     to each bootstrap sample with the selected q1 features.
+  #   - Calculate an importance measure from the fitted coefficients.
+  #     
+  # Step 2:
+  #
+  original_X <- X
+  original_y <- y
+  demeaned <- demean(X, y, continuous)
+  X <- demeaned$X
+  if (continuous) {
+    y <- demeaned$y
+  }
   importance <- random_lasso.generate(X, y, B, q1, continuous)
-  beta_j_hat <- random_lasso.select(X, y, B, q2, importance, continuous)
-  return(beta_j_hat)
+  beta_hat <- random_lasso.select(X, y, B, q2, importance, continuous)
+  if (continuous) {
+    return(list(X.original = original_X, 
+                X.demeaned = X, 
+                y.original = original_y,
+                y.demeaned = y,
+                beta_hat = beta_hat,
+                model_params = list(continuous = continuous,
+                                     B = B,
+                                     q1 = q1,
+                                     q2 = q2)
+                ))
+  }
+  else {
+    return(list(X.original = original_X, 
+                X.demeaned = X, 
+                y.original = y,
+                beta_hat = beta_hat,
+                model_params = list(continuous = continuous,
+                                    B = B,
+                                    q1 = q1,
+                                    q2 = q2)
+    ))
+  }
 }
 
-random_lasso.predict <- function() {}
+
+random_lasso.predict <- function(random_lasso_model, y) {
+  # if (random_lasso_model$model_params$continuous) {}
+}
+
+
+
 
 cv.random_lasso <- function(X, y, B, Q1, Q2, continuous) {
   for (q1 in Q1) {
