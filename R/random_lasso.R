@@ -34,7 +34,7 @@ demean <- function(X, y, continuous) {
   else {
     return(list(X = demeaned_X,))
   }
-  
+
 }
 
 
@@ -42,23 +42,34 @@ demean <- function(X, y, continuous) {
 ########################### Generic Regularized GLM ############################
 ################################################################################
 
-
-regularized_glm <- function(X, y, alpha=0, continuous=T, exclude=NULL) {
+regularized_glm <- function(X, y, alpha=0, continuous=T, exclude=NULL,intercept=T) {
   X <- as.matrix(X)
-  
-  
-  
+
   if (continuous) {
-    cv <- cv.glmnet(X, y, alpha=alpha, exclude=exclude)
-    model <- glmnet(X, y, alpha=alpha, exclude=exclude, lambda=cv$lambda.min)
-  } 
-  else {
-    y <- as.factor(y)
-    cv <- cv.glmnet(X, y, alpha=alpha, exclude=exclude, family='binomial')
-    model <- glmnet(X, y, alpha=alpha, exclude=exclude, 
-                      family='binomial', lambda=cv$lambda.min)
+    if(intercept){
+      cv <- cv.glmnet(X, y, alpha=alpha, exclude=exclude)
+      model <- glmnet(X, y, alpha=alpha, exclude=exclude, lambda=cv$lambda.min)
+    }
+    else{
+      cv <- cv.glmnet(X, y, alpha=alpha, exclude=exclude)
+      model <- glmnet(X, y, alpha=alpha, exclude=exclude,
+                      lambda=cv$lambda.min, intercept=FALSE)
+    }
   }
-  
+  else {
+    if(intercept){
+      y <- as.factor(y)
+      cv <- cv.glmnet(X, y, alpha=alpha, exclude=exclude, family='binomial')
+      model <- glmnet(X, y, alpha=alpha, exclude=exclude,
+                      family='binomial', lambda=cv$lambda.min)
+    }
+    else{
+      y <- as.factor(y)
+      cv <- cv.glmnet(X, y, alpha=alpha, exclude=exclude, family='binomial')
+      model <- glmnet(X, y, alpha=alpha, exclude=exclude,
+                      family='binomial', lambda=cv$lambda.min,intercept=FALSE)
+    }
+  }
   return (model)
 }
 
@@ -67,12 +78,12 @@ regularized_glm <- function(X, y, alpha=0, continuous=T, exclude=NULL) {
 ################################################################################
 
 
-lasso <- function(X, y, continuous=TRUE, exclude=NULL) {
-  return(regularized_glm(X, y, 1, continuous, exclude))
+lasso <- function(X, y, continuous=TRUE, exclude=NULL,intercept=TRUE) {
+  return(regularized_glm(X, y, 1, continuous, exclude,intercept))
 }
 
-ridge <- function(X, y, continuous=TRUE, exclude=NULL) {
-  return(regularized_glm(X, y, 0, continuous, exclude))
+ridge <- function(X, y, continuous=TRUE, exclude=NULL,intercept=TRUE) {
+  return(regularized_glm(X, y, 0, continuous, exclude,intercept))
 }
 
 ################################################################################
@@ -81,23 +92,23 @@ ridge <- function(X, y, continuous=TRUE, exclude=NULL) {
 
 random_lasso.generate_i <- function(X, y, q1, continuous) {
   bs <- bootstrap(X,y)
-  
+
   q <- dim(X)[2]
   exclude <- sample(1:q, q-q1, replace=FALSE)
-  
-  beta_j_hat <- coef(lasso(bs$X, bs$y, continuous, exclude))
-  return(as.vector(beta_j_hat))
+
+  beta_j_hat <- coef(lasso(bs$X, bs$y, continuous, exclude, intercept = F))
+  return(as.vector(beta_j_hat)[-1])
 }
 
 
 random_lasso.generate <- function(X, y, B, q1, continuous) {
   q <- dim(X)[2]
-  
+
   beta_hat <- matrix(NA, nrow=B, ncol=q)
   for (i in 1:B) {
     beta_hat[i,] <- t(as.matrix(random_lasso.generate_i(X, y, q1, continuous)))
   }
-  
+
   importance <- apply(t(beta_hat), 1, function(x) abs(1/B*sum(x)))
   return(importance)
 }
@@ -109,24 +120,24 @@ random_lasso.generate <- function(X, y, B, q1, continuous) {
 
 random_lasso.select_i <- function(X, y, B, q2, importance, continuous) {
   bs <- bootstrap(X,y)
-  
+
   q <- dim(X)[2]
   include <- sample(1:q, q2, replace=FALSE, prob = importance)
   exclude <- (1:q)[-include]
-  
-  beta_j_hat <- coef(lasso(bs$X, bs$y, continuous, exclude))
-  return(as.vector(beta_j_hat))
+
+  beta_j_hat <- coef(lasso(bs$X, bs$y, continuous, exclude,intercept = F))
+  return(as.vector(beta_j_hat)[-1])
 }
 
 random_lasso.select <- function(X, y, B, q2, importance, continuous) {
   q <- dim(X)[2]
-  
+
   beta_hat <- matrix(NA, nrow=B, ncol=q)
   for (i in 1:B) {
-    beta_hat[i,] <- t(as.matrix(random_lasso.select_i(X, y, B, q2, 
+    beta_hat[i,] <- t(as.matrix(random_lasso.select_i(X, y, B, q2,
                                                       importance, continuous)))
   }
-  
+
   beta_j_final <- apply(t(beta_hat), 1, function(x) 1/B * sum(x))
   return(beta_j_final)
 }
@@ -144,7 +155,7 @@ random_lasso <- function(X, y, B, q1, q2, continuous) {
   #   - Apply linear regression with lasso regularization
   #     to each bootstrap sample with the selected q1 features.
   #   - Calculate an importance measure from the fitted coefficients.
-  #     
+  #
   # Step 2:
   #
   original_X <- X
@@ -157,8 +168,8 @@ random_lasso <- function(X, y, B, q1, q2, continuous) {
   importance <- random_lasso.generate(X, y, B, q1, continuous)
   beta_hat <- random_lasso.select(X, y, B, q2, importance, continuous)
   if (continuous) {
-    return(list(X.original = original_X, 
-                X.demeaned = X, 
+    return(list(X.original = original_X,
+                X.demeaned = X,
                 y.original = original_y,
                 y.demeaned = y,
                 beta_hat = beta_hat,
@@ -169,8 +180,8 @@ random_lasso <- function(X, y, B, q1, q2, continuous) {
                 ))
   }
   else {
-    return(list(X.original = original_X, 
-                X.demeaned = X, 
+    return(list(X.original = original_X,
+                X.demeaned = X,
                 y.original = y,
                 beta_hat = beta_hat,
                 model_params = list(continuous = continuous,
@@ -192,7 +203,7 @@ random_lasso.predict <- function(random_lasso_model, y) {
 cv.random_lasso <- function(X, y, B, Q1, Q2, continuous) {
   for (q1 in Q1) {
     for (q2 in Q2) {
-      
+
     }
   }
 }
