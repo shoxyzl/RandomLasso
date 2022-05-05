@@ -32,7 +32,7 @@ demean <- function(X, y, continuous) {
     return(list(X = demeaned_X, y = demeaned_y))
   }
   else {
-    return(list(X = demeaned_X,))
+    return(list(X = demeaned_X))
   }
 
 }
@@ -78,6 +78,21 @@ regularized_glm <- function(X, y, alpha=0, continuous=T, exclude=NULL,intercept=
 ################################################################################
 
 
+#' lasoo
+#'
+#' Fit a generalized linear model by lasso regression.
+#' Can deal with continuous and binary dependent variable Y.
+#'
+#' @param X independent variable
+#' @param y dependent variable
+#' @param continuous whether the dependent variable is continuous. Default is true.
+#' @param exclude Indices of variables to be excluded from the model. Default is none.
+#' @param intercept Should intercept(s) be fitted (default=TRUE) or set to zero (FALSE)
+#'
+#' @return
+#' @export
+#'
+#' @examples lasso(X = matrix(rnorm(100 * 20), 100, 20), y = rnorm(100))
 lasso <- function(X, y, continuous=TRUE, exclude=NULL,intercept=TRUE) {
   return(regularized_glm(X, y, 1, continuous, exclude,intercept))
 }
@@ -208,11 +223,13 @@ cv.random_lasso <- function(X, y, B, Q1, Q2, continuous) {
   }
 }
 
+dat <- read.delim('http://www.ams.sunysb.edu/~pfkuan/Teaching/AMS597/Data/leukemiaDataSet.txt',
+                  header=T,sep='\t')
+X <- dat[,-1]
+y<- dat[,1]
 
-X = matrix(rnorm(100 * 20), 100, 20)
-y = rnorm(100)
 B = 100
-q1 = 5
-q2 = 8
+q1 = 2
+q2 = 3
 
-beta_j_hat <- random_lasso(X,y,B,q1,q2,T)
+beta_j_hat <- random_lasso(dat[,-1],dat[,1],B,q1,q2,F)
