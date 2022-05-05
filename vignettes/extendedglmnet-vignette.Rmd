@@ -1,0 +1,78 @@
+---
+title: "extendedglmnet-vignette"
+author: 
+  - Branden Ciranni
+  - Zhilin Yang
+output:
+  pdf_document:
+    fig_caption: yes
+    toc: yes
+    toc_depth: 3
+vignette: >
+  %\VignetteIndexEntry{extendedglmnet-vignette}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+## Introduction
+Extendedglmnet is a package for AMS 597 Spring 2022 Project. It could fit linear or logistic regression, lasso regression, ridge regression and random lasso regression. This vignette describes basic usage of extendedglmnet in R. 
+
+
+## Installation
+```{r, eval=FALSE}
+install.packages("extendedglmnet.tar.gz")
+```
+
+
+## Quick Start
+
+The purpose of this section is to give users a general sense of the package. We will briefly go over the main functions, basic operations and outputs. After this section, users may have a better idea of what functions are available, which ones to use, or at least where to seek help.
+
+#
+
+The default model used in the package is the Guassian linear model or "least squares", which we will demonstrate in this section. We load a set of data created beforehand for illustration:
+```{r}
+data <- as.data.frame(QuickStartExample)
+x <- data[,-21]
+y <- data$y
+```
+The command loads an input matrix `x` and a response vector `y` from this saved R data archive.
+
+The first function is linear regression model which is called 'linear'
+```{r}
+linear.fit <- linear(x, y)
+summary(linear.fit)
+```
+
+The second function is logistic regression model which is called 'linear'
+```{r}
+logistic.fit <- logistic(x, y)
+summary(logistic.fit)
+```
+
+The third function is lasso regression which is  'lasso'. 
+```{r}
+lasso.fit <- lasso(x, y)
+coef(lasso.fit)
+```
+By 'coef(lasso.fit)' we can get the estimated coefficients.
+
+The fourth function is ridge regression which is 'lasso'.
+```{r}
+ridge.fit <- ridge(x, y)
+coef(ridge.fit)
+```
+Same like 'lasso', it will return the estimated coefficients.
+
+Next function is random lasso regression.
+```{r}
+ridge.fit <- ridge(x, y)
+coef(ridge.fit)
+```
