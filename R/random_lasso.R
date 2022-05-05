@@ -17,7 +17,7 @@ bootstrap <- function(X, y) {
 }
 
 
-demean <- function(X, y, continuous) {
+demean <- function(X, y, continuous=NULL) {
   # tell X and y that they are no-good wastes of space.
   n <- dim(X)[1]
   demeaned_X <- X
@@ -27,12 +27,13 @@ demean <- function(X, y, continuous) {
     demeaned_row <- X[i,] - feature_means
     demeaned_X[i,] <- demeaned_row
   }
-  if (continuous) {
+  if (continuous & !missing(y)) {
     demeaned_y <- y - mean(y)
-    return(list(X = demeaned_X, y = demeaned_y))
+    return(list(X = demeaned_X, X_mean = feature_means,
+                y = demeaned_y, y_mean = mean(y)))
   }
   else {
-    return(list(X = demeaned_X))
+    return(list(X = demeaned_X, X_mean = feature_means))
   }
 
 }
@@ -185,8 +186,10 @@ random_lasso <- function(X, y, B, q1, q2, continuous) {
   if (continuous) {
     return(list(X.original = original_X,
                 X.demeaned = X,
+                X.mean = demeaned$X_mean,
                 y.original = original_y,
                 y.demeaned = y,
+                y.mean = demeaned$y_mean,
                 beta_hat = beta_hat,
                 model_params = list(continuous = continuous,
                                      B = B,
@@ -197,6 +200,7 @@ random_lasso <- function(X, y, B, q1, q2, continuous) {
   else {
     return(list(X.original = original_X,
                 X.demeaned = X,
+                X.mean = demeaned$X_mean,
                 y.original = y,
                 beta_hat = beta_hat,
                 model_params = list(continuous = continuous,
@@ -208,8 +212,13 @@ random_lasso <- function(X, y, B, q1, q2, continuous) {
 }
 
 
-random_lasso.predict <- function(random_lasso_model, y) {
+random_lasso.predict <- function(random_lasso_model, X) {
   # if (random_lasso_model$model_params$continuous) {}
+  return (X %*% random_lasso_model$beta_hat)
+}
+
+inv_logit <- function(beta) {
+  return( exp(sum(beta)) / (1 + exp(sum(beta))) > 0.5)
 }
 
 
@@ -225,7 +234,7 @@ cv.random_lasso <- function(X, y, B, Q1, Q2, continuous) {
 
 dat <- read.delim('http://www.ams.sunysb.edu/~pfkuan/Teaching/AMS597/Data/leukemiaDataSet.txt',
                   header=T,sep='\t')
-X <- dat[,-1]
+X <- as.matrix(dat[,-1])
 y<- dat[,1]
 
 B = 100
@@ -233,3 +242,5 @@ q1 = 2
 q2 = 3
 
 beta_j_hat <- random_lasso(dat[,-1],dat[,1],B,q1,q2,F)
+
+pred <- random_lasso.predict(beta_j_hat, X)
