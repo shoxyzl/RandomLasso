@@ -17,7 +17,6 @@ bootstrap <- function(X, y) {
 
 
 demean <- function(X, y, continuous=NULL) {
-  # tell X and y that they are no-good wastes of space.
   n <- dim(X)[1]
   demeaned_X <- X
   feature_means <- apply(X, 2, mean)
