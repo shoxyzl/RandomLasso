@@ -1,4 +1,6 @@
-library(parallel)
+# Authors:
+# Zhilin Yang & Branden Ciranni
+
 library(glmnet)
 
 
