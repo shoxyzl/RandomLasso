@@ -36,6 +36,18 @@ demean <- function(X, y, continuous=NULL) {
 
 }
 
+inv_logit <- function(y_hat) {
+  return( as.numeric(exp(y_hat) / (1 + exp(y_hat)) > 0.5))
+}
+
+classification_accuracy <- function(y, y_hat) {
+  return(sum(y==y_hat)/length(y))
+}
+
+regression_mse <- function(y, y_hat) {
+  return(sum((y-y_hat)^2)/length(y))
+}
+
 
 ################################################################################
 ########################### Generic Regularized GLM ############################
@@ -77,7 +89,7 @@ regularized_glm <- function(X, y, alpha=0, continuous=T, exclude=NULL,intercept=
 ################################################################################
 
 
-#' lasoo
+#' lasso
 #'
 #' Fit a generalized linear model by lasso regression.
 #' Can deal with continuous and binary dependent variable Y.
@@ -162,26 +174,50 @@ random_lasso.select <- function(X, y, B, q2, importance, continuous) {
 ################################################################################
 
 
+#' Random Lasso
+#'
+#' @param X Matrix of covariates
+#' @param y array-like of Variable (Continuous or Binary)
+#' @param B Number of Bootstrap Samples
+#' @param q1 Number of random features to choose in generate step.
+#' @param q2 Number of features to choose based on probabilities in select step.
+#' @param continuous True if y is continuous, else False and Binary
+#'
+#' @return Beta Coefficient Values for fitted model
+#' @export
+#'
+#' @examples 
+#' 
+#' data('QuickStartExample')
+#'
+#' B = 100
+#' q1 = 10
+#' q2 = 5
+#' X <- QuickStartExample$x
+#' y <- QuickStartExample$y
+#' continuous = T
+#' 
+#' rlm <- random_lasso(X, y, B, q1, q2, continuous)
 random_lasso <- function(X, y, B, q1, q2, continuous) {
-  # Step 1:
-  #   - Create some number of bootstrap samples
-  #   - Select a subset of covariates for each sample
-  #     - randomly choosing some number of features "q1"
-  #   - Apply linear regression with lasso regularization
-  #     to each bootstrap sample with the selected q1 features.
-  #   - Calculate an importance measure from the fitted coefficients.
-  #
-  # Step 2:
-  #
+  # original values before mean correction
   original_X <- X
   original_y <- y
+  
+  # peform mean correction as suggested in the paper
   demeaned <- demean(X, y, continuous)
   X <- demeaned$X
   if (continuous) {
     y <- demeaned$y
   }
+  
+  # calculate importance values from step 1: generate method
   importance <- random_lasso.generate(X, y, B, q1, continuous)
+  
+  # use importance values to select q2 features and fit model with these.
   beta_hat <- random_lasso.select(X, y, B, q2, importance, continuous)
+  
+  # return list with information relevant to the model for prediction and
+  # diagnostics
   if (continuous) {
     return(list(X.original = original_X,
                 X.demeaned = X,
@@ -211,10 +247,34 @@ random_lasso <- function(X, y, B, q1, q2, continuous) {
 }
 
 
-inv_logit <- function(y_hat) {
-  return( as.numeric(exp(y_hat) / (1 + exp(y_hat)) > 0.5))
-}
+################################################################################
+################################# Prediction ###################################
+################################################################################
 
+
+#' Random Lasso Prediction
+#'
+#' @param random_lasso_model Fitted Random Lasso Model from `random_lasso` above
+#' @param X Matrix of Covariates
+#'
+#' @return Either the predicted y_hat value for continuous targets, or a binary
+#' logit output for binary targets.
+#' @export
+#'
+#' @examples
+#' data('BinomialExample')
+#'
+#' X <- BinomialExample$x
+#' y <- BinomialExample$y
+#' 
+#' B = 100
+#' q1 = 15
+#' q2 = 10
+#' continuous = F
+#' 
+#' 
+#' rlm <- random_lasso(X, y, B, q1, q2, continuous)
+#' random_lasso.predict(rlm, X)
 random_lasso.predict <- function(random_lasso_model, X) {
   y_hat <- X %*% random_lasso_model$beta_hat
   if (random_lasso_model$model_params$continuous) {
@@ -225,15 +285,45 @@ random_lasso.predict <- function(random_lasso_model, X) {
   }
 }
 
-classification_accuracy <- function(y, y_hat) {
-  return(sum(y==y_hat)/length(y))
-}
 
-regression_mse <- function(y, y_hat) {
-  return(sum((y-y_hat)^2)/length(y))
-}
+################################################################################
+########################### q1 & q2 Cross Validation ###########################
+################################################################################
 
 
+#' Cross Validation to find optimal q1 & q2 values.
+#'
+#' @param X Matrix of Covariates
+#' @param y array-like of target variable
+#' @param B Number of Bootstrap Samples
+#' @param Q1 Vector of q1 values for grid search
+#' @param Q2 Vector of q2 values for grid search
+#' @param continuous True if y is continuous, else False and Binary.
+#' @param training_size Ratio of Train/Test Split.
+#'
+#' @return Performance Matrix containing either MSE for Continuous Y, or
+#' Prediction Accuracy for Binary Y.
+#' @export
+#'
+#' @examples
+#' 
+#' data('QuickStartExample')
+#'
+#' B = 100
+#' X <- QuickStartExample$x
+#' y <- QuickStartExample$y
+#' 
+#' 
+#' perf_mat <- cv.random_lasso(X, y, B, 
+#'                              Q1=c(10, 20), 
+#'                              Q2=c(5, 10, 15), 
+#'                              continuous=T, 
+#'                              training_size=0.7)
+#'                              
+#' perf_mat
+#'          [,1]     [,2]     [,3]
+#' [1,] 3.189807 1.229554 1.382035
+#' [2,] 2.252646 1.223567 1.331062
 cv.random_lasso <- function(X, y, B, Q1, Q2, continuous, training_size=0.7) {
   I = length(Q1)
   J = length(Q2)
@@ -249,16 +339,20 @@ cv.random_lasso <- function(X, y, B, Q1, Q2, continuous, training_size=0.7) {
     q1 = Q1[i]
     for (j in 1:J) {
       q2 = Q2[j]
+      
+        # Split data into train/test sets
         trainID <- sample(1:n,round(training_size*n))
         X_train <- X[trainID,]
         y_train <- y[trainID]
         X_test <- X[-trainID,]
         y_test <- y[-trainID]
         
+        # fit rlm model and predict
         rlm <- random_lasso(X_train, y_train, B, q1, q2, continuous)
         y_hat <- random_lasso.predict(rlm, X_test)
         
         
+        # calculate performance metric
         if (continuous==F) {
           performance <- classification_accuracy(y_test, y_hat)
         }
@@ -266,34 +360,11 @@ cv.random_lasso <- function(X, y, B, Q1, Q2, continuous, training_size=0.7) {
           performance <- regression_mse(y_test, y_hat)
         }
         
+        # populate performance matrix
         perf[i,j] <- performance
     }
   }
   return (perf)
 }
 
-data('BinomialExample')
-data('QuickStartExample')
 
-X <- BinomialExample$x
-y <- BinomialExample$y
-
-X <- QuickStartExample$x
-y <- QuickStartExample$y
-
-
-
-# dat <- read.delim('http://www.ams.sunysb.edu/~pfkuan/Teaching/AMS597/Data/leukemiaDataSet.txt',
-#                   header=T,sep='\t')
-#  <- as.matrix(dat[,-1])
-# y <- dat[,1]
-# as.numeric(y)
-# y[which(y==y[1])] = 1
-# y[which(y!=y[1])] = 0
-# y <- as.numeric(y)
-
-# y
-
-B = 100
-
-perf_mat <- cv.random_lasso(X, y, B, Q1=c(10, 20), Q2=c(5, 10, 15), continuous=T, training_size=0.7)
