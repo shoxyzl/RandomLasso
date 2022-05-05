@@ -1,6 +1,5 @@
 library(parallel)
 library(glmnet)
-library(tune)
 
 
 ################################################################################
@@ -101,6 +100,7 @@ lasso <- function(X, y, continuous=TRUE, exclude=NULL,intercept=TRUE) {
 ridge <- function(X, y, continuous=TRUE, exclude=NULL,intercept=TRUE) {
   return(regularized_glm(X, y, 0, continuous, exclude,intercept))
 }
+
 
 ################################################################################
 ############################### Generate Step ##################################
@@ -212,35 +212,89 @@ random_lasso <- function(X, y, B, q1, q2, continuous) {
 }
 
 
+inv_logit <- function(y_hat) {
+  return( as.numeric(exp(y_hat) / (1 + exp(y_hat)) > 0.5))
+}
+
 random_lasso.predict <- function(random_lasso_model, X) {
-  # if (random_lasso_model$model_params$continuous) {}
-  return (X %*% random_lasso_model$beta_hat)
-}
-
-inv_logit <- function(beta) {
-  return( exp(sum(beta)) / (1 + exp(sum(beta))) > 0.5)
-}
-
-
-
-
-cv.random_lasso <- function(X, y, B, Q1, Q2, continuous) {
-  for (q1 in Q1) {
-    for (q2 in Q2) {
-
-    }
+  y_hat <- X %*% random_lasso_model$beta_hat
+  if (random_lasso_model$model_params$continuous) {
+    return (y_hat)
+  }
+  else {
+    return (inv_logit(y_hat))
   }
 }
 
-dat <- read.delim('http://www.ams.sunysb.edu/~pfkuan/Teaching/AMS597/Data/leukemiaDataSet.txt',
-                  header=T,sep='\t')
-X <- as.matrix(dat[,-1])
-y<- dat[,1]
+classification_accuracy <- function(y, y_hat) {
+  return(sum(y==y_hat)/length(y))
+}
+
+regression_mse <- function(y, y_hat) {
+  return(sum((y-y_hat)^2)/length(y))
+}
+
+
+cv.random_lasso <- function(X, y, B, Q1, Q2, continuous, training_size=0.7) {
+  I = length(Q1)
+  J = length(Q2)
+  n = dim(X)[1]
+  
+  if (continuous) {
+    perf <- matrix(Inf, nrow=I, ncol=J)
+  }
+  else {
+    perf <- matrix(0, nrow=I, ncol=J)
+  }
+  for (i in 1:I) {
+    q1 = Q1[i]
+    for (j in 1:J) {
+      q2 = Q2[j]
+        trainID <- sample(1:n,round(training_size*n))
+        X_train <- X[trainID,]
+        y_train <- y[trainID]
+        X_test <- X[-trainID,]
+        y_test <- y[-trainID]
+        
+        rlm <- random_lasso(X_train, y_train, B, q1, q2, continuous)
+        y_hat <- random_lasso.predict(rlm, X_test)
+        
+        
+        if (continuous==F) {
+          performance <- classification_accuracy(y_test, y_hat)
+        }
+        else {
+          performance <- regression_mse(y_test, y_hat)
+        }
+        
+        perf[i,j] <- performance
+    }
+  }
+  return (perf)
+}
+
+data('BinomialExample')
+data('QuickStartExample')
+
+X <- BinomialExample$x
+y <- BinomialExample$y
+
+X <- QuickStartExample$x
+y <- QuickStartExample$y
+
+
+
+# dat <- read.delim('http://www.ams.sunysb.edu/~pfkuan/Teaching/AMS597/Data/leukemiaDataSet.txt',
+#                   header=T,sep='\t')
+#  <- as.matrix(dat[,-1])
+# y <- dat[,1]
+# as.numeric(y)
+# y[which(y==y[1])] = 1
+# y[which(y!=y[1])] = 0
+# y <- as.numeric(y)
+
+# y
 
 B = 100
-q1 = 2
-q2 = 3
 
-beta_j_hat <- random_lasso(dat[,-1],dat[,1],B,q1,q2,F)
-
-pred <- random_lasso.predict(beta_j_hat, X)
+perf_mat <- cv.random_lasso(X, y, B, Q1=c(10, 20), Q2=c(5, 10, 15), continuous=T, training_size=0.7)
